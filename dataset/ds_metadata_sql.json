@@ -1,0 +1,75 @@
+{
+	"name": "ds_metadata_sql",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_azsql_metadata",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "dataset_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "source_system",
+				"type": "varchar"
+			},
+			{
+				"name": "dataset_name",
+				"type": "varchar"
+			},
+			{
+				"name": "source_container",
+				"type": "varchar"
+			},
+			{
+				"name": "source_directory",
+				"type": "varchar"
+			},
+			{
+				"name": "source_file_format",
+				"type": "varchar"
+			},
+			{
+				"name": "sink_container",
+				"type": "varchar"
+			},
+			{
+				"name": "sink_directory",
+				"type": "varchar"
+			},
+			{
+				"name": "sink_file_format",
+				"type": "varchar"
+			},
+			{
+				"name": "recursive_read",
+				"type": "char"
+			},
+			{
+				"name": "copy_enabled",
+				"type": "char"
+			},
+			{
+				"name": "created_ts",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "modified_ts",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "md_dataset_config"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

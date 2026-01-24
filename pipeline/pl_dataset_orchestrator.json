@@ -1,0 +1,92 @@
+{
+	"name": "pl_dataset_orchestrator",
+	"properties": {
+		"activities": [
+			{
+				"name": "Lookup_Metadata",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT *\nFROM dbo.md_dataset_config\nWHERE copy_enabled = 'Y';\n",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_metadata_sql",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_pipeline",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Lookup_Metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Lookup_Metadata').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Execute_Pipeline",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_file_processor",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"source_container": {
+										"value": "@item().source_container",
+										"type": "Expression"
+									},
+									"source_directory": {
+										"value": "@item().source_directory",
+										"type": "Expression"
+									},
+									"sink_container": {
+										"value": "@item().sink_container",
+										"type": "Expression"
+									},
+									"sink_directory": {
+										"value": "@item().sink_directory",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2026-01-19T10:32:21Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,12 @@
+{
+	"name": "ls_blob_datalake",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobStorage",
+		"typeProperties": {
+			"serviceEndpoint": "https://databricksmetadatadriven.blob.core.windows.net/",
+			"accountKind": "StorageV2"
+		}
+	}
+}

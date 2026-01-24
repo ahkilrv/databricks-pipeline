@@ -1,0 +1,9 @@
+{
+	"name": "metadatadrivenpipelineadf",
+	"location": "southindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "b24999d6-f80f-4199-aca0-34f0b801ebe4",
+		"tenantId": "d9cba408-c558-463c-bdbc-55d78497508c"
+	}
+}
