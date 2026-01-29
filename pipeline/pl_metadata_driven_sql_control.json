@@ -1,0 +1,298 @@
+{
+	"name": "pl_metadata_driven_sql_control",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetWatermark",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT ISNULL(\n    (SELECT watermark_value FROM @{pipeline().parameters.control_table_schema}.@{pipeline().parameters.control_table_name} WHERE table_name = '@{pipeline().parameters.source_table}'), \n    '@{pipeline().parameters.first_cdc}'\n) as watermark",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_raw_sql",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "Set Current Timestamp",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "current",
+					"value": {
+						"value": "@utcNow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Copy data",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "GetWatermark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set Current Timestamp",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "select * from \n@{pipeline().parameters.source_schema}.@{pipeline().parameters.source_table}\nwhere @{pipeline().parameters.cdc_col} > '@{if(empty(pipeline().parameters.backfill_date), activity('GetWatermark').output.firstRow.watermark, pipeline().parameters.backfill_date)}'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "ParquetSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "ParquetWriteSettings"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ds_raw_sql",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ds_bronze_parquet",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": {
+								"value": "@pipeline().parameters.output_container",
+								"type": "Expression"
+							},
+							"directory": {
+								"value": "@pipeline().parameters.source_table",
+								"type": "Expression"
+							},
+							"filename": {
+								"value": "@concat(pipeline().parameters.source_table, '_', variables('current'), '.parquet')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "If Data Copied",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Copy data",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('Copy data').output.dataRead,0)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "DeleteEmptyFile",
+							"type": "Delete",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "ds_bronze_parquet",
+									"type": "DatasetReference",
+									"parameters": {
+										"container": {
+											"value": "@pipeline().parameters.output_container",
+											"type": "Expression"
+										},
+										"directory": {
+											"value": "@pipeline().parameters.source_table",
+											"type": "Expression"
+										},
+										"filename": {
+											"value": "@concat(pipeline().parameters.source_table, '_', variables('current'), '.parquet')",
+											"type": "Expression"
+										}
+									}
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "GetNewMaxCDC",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "select max(@{pipeline().parameters.cdc_col}) as new_watermark from \n@{pipeline().parameters.source_schema}.@{pipeline().parameters.source_table}",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "ds_raw_sql",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "UpsertWatermark",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "GetNewMaxCDC",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "ls_azure_sql_database",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "MERGE INTO @{pipeline().parameters.control_table_schema}.@{pipeline().parameters.control_table_name} AS target\nUSING (SELECT '@{pipeline().parameters.source_table}' AS table_name, '@{activity('GetNewMaxCDC').output.firstRow.new_watermark}' AS watermark_value) AS source\nON (target.table_name = source.table_name)\nWHEN MATCHED THEN\n    UPDATE SET watermark_value = source.watermark_value, last_run_time = GETDATE()\nWHEN NOT MATCHED THEN\n    INSERT (table_name, watermark_value, last_run_time)\n    VALUES (source.table_name, source.watermark_value, GETDATE());",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"source_table": {
+				"type": "String",
+				"defaultValue": "DimUser"
+			},
+			"source_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"cdc_col": {
+				"type": "String",
+				"defaultValue": "updated_at"
+			},
+			"first_cdc": {
+				"type": "string",
+				"defaultValue": "1900-01-01 00:00:00"
+			},
+			"output_container": {
+				"type": "String",
+				"defaultValue": "bronze"
+			},
+			"control_table_name": {
+				"type": "String",
+				"defaultValue": "run_history"
+			},
+			"control_table_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"backfill_date": {
+				"type": "String"
+			}
+		},
+		"variables": {
+			"current": {
+				"type": "String"
+			}
+		},
+		"annotations": []
+	}
+}

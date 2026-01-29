@@ -3,7 +3,7 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "Lookup_Metadata",
+				"name": "GetActiveTables",
 				"type": "Lookup",
 				"dependsOn": [],
 				"policy": {
@@ -17,23 +17,23 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT *\nFROM dbo.md_dataset_config\nWHERE copy_enabled = 'Y';\n",
+						"sqlReaderQuery": "SELECT DISTINCT * FROM dbo.Metadata_Control_List WHERE IsActive = 1",
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
 					"dataset": {
-						"referenceName": "ds_metadata_sql",
+						"referenceName": "ds_raw_sql",
 						"type": "DatasetReference"
 					},
 					"firstRowOnly": false
 				}
 			},
 			{
-				"name": "ForEach_pipeline",
+				"name": "ForEachTable",
 				"type": "ForEach",
 				"dependsOn": [
 					{
-						"activity": "Lookup_Metadata",
+						"activity": "GetActiveTables",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -42,13 +42,14 @@
 				"userProperties": [],
 				"typeProperties": {
 					"items": {
-						"value": "@activity('Lookup_Metadata').output.value",
+						"value": "@activity('GetActiveTables').output.value",
 						"type": "Expression"
 					},
 					"isSequential": false,
+					"batchCount": 5,
 					"activities": [
 						{
-							"name": "Execute_Pipeline",
+							"name": "ExecuteWorker",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
 							"policy": {
@@ -57,25 +58,25 @@
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
-									"referenceName": "pl_file_processor",
+									"referenceName": "pl_metadata_driven_sql_control",
 									"type": "PipelineReference"
 								},
 								"waitOnCompletion": true,
 								"parameters": {
-									"source_container": {
-										"value": "@item().source_container",
+									"source_table": {
+										"value": "@item().SourceTableName",
 										"type": "Expression"
 									},
-									"source_directory": {
-										"value": "@item().source_directory",
+									"source_schema": {
+										"value": "@item().SourceSchema",
 										"type": "Expression"
 									},
-									"sink_container": {
-										"value": "@item().sink_container",
+									"cdc_col": {
+										"value": "@item().CDC_Column",
 										"type": "Expression"
 									},
-									"sink_directory": {
-										"value": "@item().sink_directory",
+									"output_container": {
+										"value": "@item().TargetContainer",
 										"type": "Expression"
 									}
 								}
@@ -85,8 +86,11 @@
 				}
 			}
 		],
-		"annotations": [],
-		"lastPublishTime": "2026-01-19T10:32:21Z"
-	},
-	"type": "Microsoft.DataFactory/factories/pipelines"
+		"parameters": {
+			"Backfill_Date": {
+				"type": "string"
+			}
+		},
+		"annotations": []
+	}
 }
