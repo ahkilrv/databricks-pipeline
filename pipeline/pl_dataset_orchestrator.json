@@ -81,8 +81,97 @@
 									}
 								}
 							}
+						},
+						{
+							"name": "FailureMail",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "ExecuteWorker",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "POST",
+								"url": "https://prod-01.southindia.logic.azure.com:443/workflows/570a519de4ed445c91909772b9904a2d/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=WM5JjW6WUt46aRh4l3xiKLKtx5OEN0X1Omj6_yULjHw",
+								"body": {
+									"value": "{\n    \"to\": \"jwalakhilraj@gmail.com\",\n    \"subject\": \"@{concat('ADF FAILURE: Load failed for table ', item().SourceTableName)}\",\n    \"message\": \"@{concat(' The incremental load for table ', item().SourceTableName, ' has failed.', '\\n\\n', 'Error Details:', '\\n', activity('ExecuteWorker').error.message, '\\n\\n', 'Time: ', utcNow())}\"\n}",
+									"type": "Expression"
+								}
+							}
 						}
 					]
+				}
+			},
+			{
+				"name": "getSuccesRuns",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "ForEachTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT table_name, last_run_time \nFROM dbo.run_history \n",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_raw_sql",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "SuccesMail",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "getSuccesRuns",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": "https://prod-01.southindia.logic.azure.com:443/workflows/570a519de4ed445c91909772b9904a2d/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=WM5JjW6WUt46aRh4l3xiKLKtx5OEN0X1Omj6_yULjHw",
+					"body": {
+						"value": "{\n    \"to\": \"jwalakhilraj@domain.com\",\n    \"subject\": \"@{concat('Pipeline Success: Incremental Load Complete - ', utcNow('yyyy-MM-dd'))}\",\n    \"message\": \"@{concat('The Master Pipeline has successfully finished running.', '\\n\\n', 'Tables Updated in this run:', '\\n', string(activity('getSuccesRuns').output.value))}\"\n}",
+						"type": "Expression"
+					}
 				}
 			}
 		],
