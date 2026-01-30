@@ -1,5 +1,5 @@
 {
-	"name": "ds_bronze_parquet",
+	"name": "ds_parquet",
 	"properties": {
 		"linkedServiceName": {
 			"referenceName": "ls_azure_blob_storage",
@@ -9,10 +9,10 @@
 			"container": {
 				"type": "string"
 			},
-			"directory": {
+			"folder": {
 				"type": "string"
 			},
-			"filename": {
+			"file": {
 				"type": "string"
 			}
 		},
@@ -22,11 +22,11 @@
 			"location": {
 				"type": "AzureBlobStorageLocation",
 				"fileName": {
-					"value": "@dataset().filename",
+					"value": "@dataset().file",
 					"type": "Expression"
 				},
 				"folderPath": {
-					"value": "@dataset().directory",
+					"value": "@dataset().folder",
 					"type": "Expression"
 				},
 				"container": {
@@ -37,6 +37,5 @@
 			"compressionCodec": "snappy"
 		},
 		"schema": []
-	},
-	"type": "Microsoft.DataFactory/factories/datasets"
+	}
 }

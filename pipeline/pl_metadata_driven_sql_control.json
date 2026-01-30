@@ -1,9 +1,9 @@
 {
-	"name": "pl_incrimental_load",
+	"name": "pl_metadata_driven_sql_control",
 	"properties": {
 		"activities": [
 			{
-				"name": "last_cdc",
+				"name": "GetWatermark",
 				"type": "Lookup",
 				"dependsOn": [],
 				"policy": {
@@ -16,29 +16,22 @@
 				"userProperties": [],
 				"typeProperties": {
 					"source": {
-						"type": "JsonSource",
-						"storeSettings": {
-							"type": "AzureBlobStorageReadSettings",
-							"recursive": true,
-							"enablePartitionDiscovery": false
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT ISNULL(\n    (SELECT watermark_value FROM @{pipeline().parameters.control_table_schema}.@{pipeline().parameters.control_table_name} WHERE table_name = '@{pipeline().parameters.source_table}'), \n    '@{pipeline().parameters.first_cdc}'\n) as watermark",
+							"type": "Expression"
 						},
-						"formatSettings": {
-							"type": "JsonReadSettings"
-						}
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
 					},
 					"dataset": {
-						"referenceName": "ds_cdc",
-						"type": "DatasetReference",
-						"parameters": {
-							"container": "bronze",
-							"folder": "cdc",
-							"file": "cdc.json"
-						}
+						"referenceName": "ds_raw_sql",
+						"type": "DatasetReference"
 					}
 				}
 			},
 			{
-				"name": "Set variable",
+				"name": "Set Current Timestamp",
 				"type": "SetVariable",
 				"dependsOn": [],
 				"policy": {
@@ -59,13 +52,13 @@
 				"type": "Copy",
 				"dependsOn": [
 					{
-						"activity": "last_cdc",
+						"activity": "GetWatermark",
 						"dependencyConditions": [
 							"Succeeded"
 						]
 					},
 					{
-						"activity": "Set variable",
+						"activity": "Set Current Timestamp",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -83,7 +76,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "select * from \n@{pipeline().parameters.schema}.@{pipeline().parameters.table}\nwhere @{pipeline().parameters.cdc_col} > '@{if(empty(pipeline().parameters.backfill), activity('last_cdc').output.firstRow.cdc, pipeline().parameters.backfill)}'",
+							"value": "select * from \n@{pipeline().parameters.source_schema}.@{pipeline().parameters.source_table}\nwhere @{pipeline().parameters.cdc_col} > '@{if(empty(pipeline().parameters.backfill_date), activity('GetWatermark').output.firstRow.watermark, pipeline().parameters.backfill_date)}'",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -119,13 +112,16 @@
 						"referenceName": "ds_bronze_parquet",
 						"type": "DatasetReference",
 						"parameters": {
-							"container": "bronze",
+							"container": {
+								"value": "@pipeline().parameters.output_container",
+								"type": "Expression"
+							},
 							"directory": {
-								"value": "@pipeline().parameters.table",
+								"value": "@pipeline().parameters.source_table",
 								"type": "Expression"
 							},
 							"filename": {
-								"value": "@concat(pipeline().parameters.table,'_',variables('current'))",
+								"value": "@concat(pipeline().parameters.source_table, '_', variables('current'), '.parquet')",
 								"type": "Expression"
 							}
 						}
@@ -133,7 +129,7 @@
 				]
 			},
 			{
-				"name": "If Condition",
+				"name": "If Data Copied",
 				"type": "IfCondition",
 				"dependsOn": [
 					{
@@ -167,12 +163,18 @@
 									"referenceName": "ds_bronze_parquet",
 									"type": "DatasetReference",
 									"parameters": {
-										"container": "bronze",
-										"directory": {
-											"value": "@pipeline().parameters.table",
+										"container": {
+											"value": "@pipeline().parameters.output_container",
 											"type": "Expression"
 										},
-										"filename": "@concat(pipeline().parameters.table,'_',variables('current'))"
+										"directory": {
+											"value": "@pipeline().parameters.source_table",
+											"type": "Expression"
+										},
+										"filename": {
+											"value": "@concat(pipeline().parameters.source_table, '_', variables('current'), '.parquet')",
+											"type": "Expression"
+										}
 									}
 								},
 								"enableLogging": false,
@@ -186,16 +188,9 @@
 					],
 					"ifTrueActivities": [
 						{
-							"name": "update_cdc",
-							"type": "Copy",
-							"dependsOn": [
-								{
-									"activity": "cdc_max",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
+							"name": "GetNewMaxCDC",
+							"type": "Lookup",
+							"dependsOn": [],
 							"policy": {
 								"timeout": "0.12:00:00",
 								"retry": 0,
@@ -206,64 +201,31 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "JsonSource",
-									"additionalColumns": [
-										{
-											"name": "cdc",
-											"value": {
-												"value": "@activity('cdc_max').output.resultSets[0].rows[0].cdc\n",
-												"type": "Expression"
-											}
-										}
-									],
-									"storeSettings": {
-										"type": "AzureBlobStorageReadSettings",
-										"recursive": true,
-										"enablePartitionDiscovery": false
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "select max(@{pipeline().parameters.cdc_col}) as new_watermark from \n@{pipeline().parameters.source_schema}.@{pipeline().parameters.source_table}",
+										"type": "Expression"
 									},
-									"formatSettings": {
-										"type": "JsonReadSettings"
-									}
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
 								},
-								"sink": {
-									"type": "JsonSink",
-									"storeSettings": {
-										"type": "AzureBlobStorageWriteSettings",
-										"copyBehavior": "FlattenHierarchy"
-									},
-									"formatSettings": {
-										"type": "JsonWriteSettings"
-									}
-								},
-								"enableStaging": false
-							},
-							"inputs": [
-								{
-									"referenceName": "ds_cdc",
-									"type": "DatasetReference",
-									"parameters": {
-										"container": "bronze",
-										"folder": "cdc",
-										"file": "empty.json"
-									}
+								"dataset": {
+									"referenceName": "ds_raw_sql",
+									"type": "DatasetReference"
 								}
-							],
-							"outputs": [
-								{
-									"referenceName": "ds_cdc",
-									"type": "DatasetReference",
-									"parameters": {
-										"container": "bronze",
-										"folder": "cdc",
-										"file": "cdc.json"
-									}
-								}
-							]
+							}
 						},
 						{
-							"name": "cdc_max",
+							"name": "UpsertWatermark",
 							"type": "Script",
-							"dependsOn": [],
+							"dependsOn": [
+								{
+									"activity": "GetNewMaxCDC",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
 							"policy": {
 								"timeout": "0.12:00:00",
 								"retry": 0,
@@ -281,7 +243,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "select max(@{pipeline().parameters.cdc_col}) as cdc from \n@{pipeline().parameters.schema}.@{pipeline().parameters.table}",
+											"value": "MERGE INTO @{pipeline().parameters.control_table_schema}.@{pipeline().parameters.control_table_name} AS target\nUSING (SELECT '@{pipeline().parameters.source_table}' AS table_name, '@{activity('GetNewMaxCDC').output.firstRow.new_watermark}' AS watermark_value) AS source\nON (target.table_name = source.table_name)\nWHEN MATCHED THEN\n    UPDATE SET watermark_value = source.watermark_value, last_run_time = GETDATE()\nWHEN NOT MATCHED THEN\n    INSERT (table_name, watermark_value, last_run_time)\n    VALUES (source.table_name, source.watermark_value, GETDATE());",
 											"type": "Expression"
 										}
 									}
@@ -294,11 +256,11 @@
 			}
 		],
 		"parameters": {
-			"table": {
+			"source_table": {
 				"type": "String",
 				"defaultValue": "DimUser"
 			},
-			"schema": {
+			"source_schema": {
 				"type": "String",
 				"defaultValue": "dbo"
 			},
@@ -306,8 +268,24 @@
 				"type": "String",
 				"defaultValue": "updated_at"
 			},
-			"backfill": {
-				"type": "string"
+			"first_cdc": {
+				"type": "string",
+				"defaultValue": "1900-01-01 00:00:00"
+			},
+			"output_container": {
+				"type": "String",
+				"defaultValue": "bronze"
+			},
+			"control_table_name": {
+				"type": "String",
+				"defaultValue": "run_history"
+			},
+			"control_table_schema": {
+				"type": "String",
+				"defaultValue": "dbo"
+			},
+			"backfill_date": {
+				"type": "String"
 			}
 		},
 		"variables": {
