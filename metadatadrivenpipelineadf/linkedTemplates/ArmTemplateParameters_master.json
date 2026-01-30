@@ -1,0 +1,39 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "metadatadrivenpipelineadf"
+		},
+		"ls_azure_blob_storage_connectionString": {
+			"value": ""
+		},
+		"ls_azure_sql_database_password": {
+			"value": ""
+		},
+		"ls_azsql_metadata_properties_typeProperties_server": {
+			"value": "metadatadriver.database.windows.net"
+		},
+		"ls_azsql_metadata_properties_typeProperties_database": {
+			"value": "metadatadriverdb"
+		},
+		"ls_azure_sql_database_properties_typeProperties_server": {
+			"value": "azuresqlserverakhil.database.windows.net"
+		},
+		"ls_azure_sql_database_properties_typeProperties_database": {
+			"value": "azuresqldatabase"
+		},
+		"ls_azure_sql_database_properties_typeProperties_userName": {
+			"value": "akhilrv"
+		},
+		"ls_blob_datalake_properties_typeProperties_serviceEndpoint": {
+			"value": "https://databricksmetadatadriven.blob.core.windows.net/"
+		},
+		"containerUri": {
+			"value": ""
+		},
+		"containerSasToken": {
+			"value": ""
+		}
+	}
+}

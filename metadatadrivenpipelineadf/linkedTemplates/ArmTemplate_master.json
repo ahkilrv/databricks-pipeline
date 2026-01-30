@@ -1,0 +1,98 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "metadatadrivenpipelineadf"
+		},
+		"ls_azure_blob_storage_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'ls_azure_blob_storage'"
+		},
+		"ls_azure_sql_database_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'ls_azure_sql_database'"
+		},
+		"ls_azsql_metadata_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "metadatadriver.database.windows.net"
+		},
+		"ls_azsql_metadata_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "metadatadriverdb"
+		},
+		"ls_azure_sql_database_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "azuresqlserverakhil.database.windows.net"
+		},
+		"ls_azure_sql_database_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "azuresqldatabase"
+		},
+		"ls_azure_sql_database_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "akhilrv"
+		},
+		"ls_blob_datalake_properties_typeProperties_serviceEndpoint": {
+			"type": "string",
+			"defaultValue": "https://databricksmetadatadriven.blob.core.windows.net/"
+		},
+		"containerUri": {
+			"type": "string",
+			"metadata": "URI to storage account containing linked ARM templates"
+		},
+		"containerSasToken": {
+			"type": "string",
+			"metadata": "Sas token to storage account containing linked ARM templates"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "metadatadrivenpipelineadf_ArmTemplate_0",
+			"type": "Microsoft.Resources/deployments",
+			"apiVersion": "2024-03-01",
+			"properties": {
+				"mode": "incremental",
+				"templateLink": {
+					"uri": "[concat(parameters('containerUri'), '/ArmTemplate_0.json', parameters('containerSasToken'))]",
+					"contentVersion": "1.0.0.0"
+				},
+				"parameters": {
+					"factoryName": {
+						"value": "[parameters('factoryName')]"
+					},
+					"ls_azure_blob_storage_connectionString": {
+						"value": "[parameters('ls_azure_blob_storage_connectionString')]"
+					},
+					"ls_azure_sql_database_password": {
+						"value": "[parameters('ls_azure_sql_database_password')]"
+					},
+					"ls_azsql_metadata_properties_typeProperties_server": {
+						"value": "[parameters('ls_azsql_metadata_properties_typeProperties_server')]"
+					},
+					"ls_azsql_metadata_properties_typeProperties_database": {
+						"value": "[parameters('ls_azsql_metadata_properties_typeProperties_database')]"
+					},
+					"ls_azure_sql_database_properties_typeProperties_server": {
+						"value": "[parameters('ls_azure_sql_database_properties_typeProperties_server')]"
+					},
+					"ls_azure_sql_database_properties_typeProperties_database": {
+						"value": "[parameters('ls_azure_sql_database_properties_typeProperties_database')]"
+					},
+					"ls_azure_sql_database_properties_typeProperties_userName": {
+						"value": "[parameters('ls_azure_sql_database_properties_typeProperties_userName')]"
+					},
+					"ls_blob_datalake_properties_typeProperties_serviceEndpoint": {
+						"value": "[parameters('ls_blob_datalake_properties_typeProperties_serviceEndpoint')]"
+					}
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}
